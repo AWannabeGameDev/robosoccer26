@@ -1,12 +1,15 @@
 #include "driver/uart.h"
 #include "esp_log.h"
+#include <inttypes.h>
 
 #define UART_NUM UART_NUM_1
-#define IBUS_BUF_SIZE 32 // 32-byte frame size
+#define IBUS_MAX_FRAME_SIZE 32 // 32-byte frame size
+#define IBUS_CHANNEL_FRAME_SIZE 32
 #define IBUS_RX_PIN 16
 #define IBUS_TIMEOUT_MS 8 // frames are sent every 7ms
+#define CHANNEL_COUNT 4
 
-void app_main(void)
+static void setup_ibus()
 {
     uart_config_t uart_config = 
     {
@@ -14,26 +17,78 @@ void app_main(void)
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT
     };
 
     uart_param_config(UART_NUM, &uart_config);
     uart_set_pin(UART_NUM, UART_PIN_NO_CHANGE, IBUS_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    uart_driver_install(UART_NUM, IBUS_BUF_SIZE * 2, 0, 0, NULL, 0); // allocate double to avoid full buffer
+    uart_driver_install(UART_NUM, IBUS_MAX_FRAME_SIZE * 2, 0, 0, NULL, 0); // allocate double to avoid full buffer
+}
 
-    uint8_t channel_data[IBUS_BUF_SIZE];
+static bool get_channel_data(uint8_t* ibus_data, uint16_t* channel_data, int channel_count)
+{
+    ibus_data[0] = 0;
+
+    // sync to the start of a frame
+    while(ibus_data[0] != IBUS_CHANNEL_FRAME_SIZE)
+    {
+        int len = uart_read_bytes(UART_NUM, ibus_data, 1, IBUS_TIMEOUT_MS / portTICK_PERIOD_MS);
+
+        if (len < 1)
+        {
+            ESP_LOGW("CONNECTION", "Signal lost");
+            return false;
+        }
+    }
+
+    int len = uart_read_bytes(UART_NUM, &ibus_data[1], IBUS_CHANNEL_FRAME_SIZE - 1, IBUS_TIMEOUT_MS / portTICK_PERIOD_MS);
+
+    if(len < IBUS_CHANNEL_FRAME_SIZE - 1)
+    {
+        ESP_LOGW("CONNECTION", "Signal lost");
+        return false;
+    }
+
+    uint16_t calc_checksum = 0xFFFF - ibus_data[0] - ibus_data[1];
+
+    for(int i = 2; i <= 2 * channel_count + 1; i += 2) // read two bytes at a time now to get channels data
+    {
+        calc_checksum -= ibus_data[i] + ibus_data[i + 1];
+        channel_data[(i - 2) / 2] = ibus_data[i] | (ibus_data[i + 1] << 8); // little-endian
+    }
+
+    for(int i = 2 * channel_count + 2; i <= 29; i++)
+    {
+        calc_checksum -= ibus_data[i];
+    }
+
+    uint16_t actual_checksum = ibus_data[30] | (ibus_data[31] << 8);
+
+    if(calc_checksum != actual_checksum)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+void app_main(void)
+{
+    setup_ibus();
+
+    uint8_t ibus_data[IBUS_MAX_FRAME_SIZE];
+    uint16_t channel_data[CHANNEL_COUNT];
 
     while (1)
     {
-        int len = uart_read_bytes(UART_NUM, channel_data, IBUS_BUF_SIZE - 1, IBUS_TIMEOUT_MS / portTICK_PERIOD_MS);
+        if(!get_channel_data(ibus_data, channel_data, CHANNEL_COUNT)) continue;
 
-        if (len > 0)
-        {
-            channel_data[len] = '\0'; // Null-terminate for printing
-            printf("Recv: %s\n", (char*)channel_data);
-        }
+        // write control logic from here on
+        // channel data is saved in channel_data
 
-        // You don't actually need a vTaskDelay here because
-        // uart_read_bytes blocks and lets the CPU do other things anyway.
+        ESP_LOGI("DEBUG", "%"PRIu16" %"PRIu16" %"PRIu16" %"PRIu16, channel_data[0], channel_data[1], channel_data[2], channel_data[3]);
+
+        // You don't actually need a vTaskDelay here because uart_read_bytes blocks and lets the CPU do other things anyway.
     }
 }
