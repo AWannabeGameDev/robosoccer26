@@ -10,8 +10,10 @@
 
 #define UART_NUM UART_NUM_2
 #define UART_RING_BUF_SIZE 256
+
 #define IBUS_MAX_FRAME_SIZE 32 // 32-byte frame size
 #define IBUS_CHANNEL_FRAME_SIZE 32
+#define IBUS_CHANNEL_CMD 0x40
 #define IBUS_RX_PIN 16
 #define IBUS_TIMEOUT_MS 20 // frames are sent every 7ms
 #define CHANNEL_COUNT 4
@@ -38,10 +40,8 @@ static bool get_channel_data(uint8_t* ibus_data, uint16_t* channel_data, int cha
     ibus_data[0] = 0;
     ibus_data[1] = 0;
 
-    uart_flush_input(UART_NUM);
-
     // sync to the start of a frame
-    while(ibus_data[0] != IBUS_CHANNEL_FRAME_SIZE || ibus_data[1] != 0x40)
+    while(ibus_data[0] != IBUS_CHANNEL_FRAME_SIZE || ibus_data[1] != IBUS_CHANNEL_CMD)
     {
         int len = uart_read_bytes(UART_NUM, ibus_data, 2, IBUS_TIMEOUT_MS / portTICK_PERIOD_MS);
 
@@ -54,7 +54,7 @@ static bool get_channel_data(uint8_t* ibus_data, uint16_t* channel_data, int cha
         }
     }
 
-    int len = uart_read_bytes(UART_NUM, &ibus_data[2], IBUS_CHANNEL_FRAME_SIZE - 2, IBUS_TIMEOUT_MS / portTICK_PERIOD_MS);
+    int len = uart_read_bytes(UART_NUM, &ibus_data[2], IBUS_CHANNEL_FRAME_SIZE - 2, 0);
 
     //ESP_LOGI("DEBUG", "Body bytes: %d", len);
 
