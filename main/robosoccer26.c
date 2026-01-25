@@ -1,6 +1,6 @@
-#include "driver/uart.h"
-#include "esp_log.h"
-#include "esp_timer.h"
+#include <driver/uart.h>
+#include <driver/gpio.h>
+#include <esp_log.h>
 #include <math.h>
 #include <inttypes.h>
 
@@ -31,8 +31,21 @@ static void setup_ibus()
     };
 
     uart_param_config(UART_NUM, &uart_config);
+
     uart_set_pin(UART_NUM, UART_PIN_NO_CHANGE, IBUS_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    uart_driver_install(UART_NUM, UART_RING_BUF_SIZE, 0, 0, NULL, 0); // allocate double to avoid full buffer
+    gpio_set_pull_mode(IBUS_RX_PIN, GPIO_PULLUP_ONLY); // to reduce electrical noise
+
+    // correct framing behavior
+    uart_intr_config_t rx_intr_config =
+    {
+        .rxfifo_full_thresh = IBUS_MAX_FRAME_SIZE,
+        .rx_timeout_thresh = IBUS_TIMEOUT_MS
+    };
+
+    uart_intr_config(UART_NUM, &rx_intr_config);
+    uart_enable_rx_intr(UART_NUM);
+
+    uart_driver_install(UART_NUM, UART_RING_BUF_SIZE, 0, 0, NULL, 0);
 }
 
 static bool get_channel_data(uint8_t* ibus_data, uint16_t* channel_data, int channel_count)
@@ -45,7 +58,11 @@ static bool get_channel_data(uint8_t* ibus_data, uint16_t* channel_data, int cha
     {
         int len = uart_read_bytes(UART_NUM, ibus_data, 2, IBUS_TIMEOUT_MS / portTICK_PERIOD_MS);
 
-        //ESP_LOGI("DEBUG", "Header bytes: %d", len);
+        if(len < 0)
+        {
+            ESP_LOGE("ERROR", "Failed to read header bytes");
+            return false;
+        }
 
         if (len < 1)
         {
@@ -54,9 +71,13 @@ static bool get_channel_data(uint8_t* ibus_data, uint16_t* channel_data, int cha
         }
     }
 
-    int len = uart_read_bytes(UART_NUM, &ibus_data[2], IBUS_CHANNEL_FRAME_SIZE - 2, 0);
+    int len = uart_read_bytes(UART_NUM, &ibus_data[2], IBUS_CHANNEL_FRAME_SIZE - 2, IBUS_TIMEOUT_MS / portTICK_PERIOD_MS);
 
-    //ESP_LOGI("DEBUG", "Body bytes: %d", len);
+    if(len < 0)
+    {
+        ESP_LOGE("ERROR", "Failed to read body bytes");
+        return false;
+    }
 
     if(len < IBUS_CHANNEL_FRAME_SIZE - 2)
     {
