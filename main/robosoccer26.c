@@ -7,9 +7,9 @@
 
 #include "motor.h"
 
-// channel 3: throttle
-// channel 2: for/bac
-// channel 1: left/right
+// channel 2: throttle
+// channel 1: for/bac
+// channel 0: left/right
 
 #define UART_NUM UART_NUM_2
 #define UART_RING_BUF_SIZE 256
@@ -40,11 +40,10 @@ static void setup_ibus()
     uart_set_pin(UART_NUM, UART_PIN_NO_CHANGE, IBUS_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     gpio_set_pull_mode(IBUS_RX_PIN, GPIO_PULLUP_ONLY); // to reduce electrical noise
 
-    // // correct framing behavior
     // uart_intr_config_t rx_intr_config =
     // {
     //     .rxfifo_full_thresh = UART_BUFFER_FULL_THRES,
-    //     .rx_timeout_thresh = IBUS_TIMEOUT_MS
+    //      .rx_timeout_thresh = IBUS_TIMEOUT_MS
     // };
 
     // uart_intr_config(UART_NUM, &rx_intr_config);
@@ -116,6 +115,7 @@ static bool get_channel_data(uint8_t* ibus_data, uint16_t* channel_data, int cha
 void app_main(void)
 {
     setup_ibus();
+    motor_init();
 
     uint8_t ibus_data[IBUS_MAX_FRAME_SIZE];
     uint16_t channel_data[CHANNEL_COUNT];
@@ -126,6 +126,8 @@ void app_main(void)
         {
             int16_t speed = channel_data[2] - 1000;
             int16_t for_bac;
+            int16_t steer = channel_data[0]-1500;
+            ESP_LOGI("data","%d",channel_data[1]);
 
             if(channel_data[1] > (1500 + JOYSTICK_DEADZONE))
             {
@@ -140,7 +142,7 @@ void app_main(void)
                 for_bac = 0;
             }
 
-            motor_set(speed * for_bac, speed * for_bac);
+            motor_set(speed * for_bac+steer/10, speed * for_bac-steer/10);
         }
 
         //vTaskDelay(IBUS_TIMEOUT_MS / portTICK_PERIOD_MS);

@@ -27,17 +27,6 @@
 #define PWM_MAX 1023
 #define PWM_DEADZONE 15
 
-/* ===== INTERNAL FUNCTION ===== */
-
-static uint32_t map_speed(int value)
-{
-    if (value < 0)
-        value = 0;
-    if (value > 500)
-        value = 500;
-    return (value * PWM_MAX) / 500;
-}
-
 /* ===== INIT ===== */
 
 void motor_init(void)
@@ -54,12 +43,15 @@ void motor_init(void)
     gpio_set_level(RIGHT_LEN, 1);
 
     // PWM timer
-    ledc_timer_config_t timer = {
+    ledc_timer_config_t timer = 
+    {
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .timer_num = LEDC_TIMER_0,
         .freq_hz = PWM_FREQ,
         .duty_resolution = PWM_RES,
-        .clk_cfg = LEDC_AUTO_CLK};
+        .clk_cfg = LEDC_AUTO_CLK
+    };
+
     ledc_timer_config(&timer);
 
     // PWM channels
@@ -90,16 +82,12 @@ void motor_init(void)
 // values are clamped between -1023 and 1023
 void motor_set(int16_t left, int16_t right)
 {
-    if (left < -PWM_MAX)
-        left = -PWM_MAX;
-    if (left > PWM_MAX)
-        left = PWM_MAX;
-    if (right < -PWM_MAX)
-        right = -PWM_MAX;
-    if (right > PWM_MAX)
-        right = PWM_MAX;
+    if (left < -PWM_MAX) left = -PWM_MAX;
+    else if (left > PWM_MAX) left = PWM_MAX;
+    if (right < -PWM_MAX) right = -PWM_MAX;
+    else if (right > PWM_MAX) right = PWM_MAX;
 
-    ESP_LOGI("PWM", "left : %d",(int)left);
+    //ESP_LOGI("PWM", "left : %d",(int)left);
 
     // LEFT SIDE
     if (left > PWM_DEADZONE)
@@ -111,7 +99,7 @@ void motor_set(int16_t left, int16_t right)
     else if (left < -PWM_DEADZONE)
     {
         ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
-        ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, left);
+        ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, -left);
     }
     else
     {
@@ -120,7 +108,7 @@ void motor_set(int16_t left, int16_t right)
           
     }
 
-    ESP_LOGI("PWM", "right : %d",(int)right);
+    //ESP_LOGI("PWM", "right : %d",(int)right);
 
     // RIGHT SIDE
     if (right > PWM_DEADZONE)
@@ -131,7 +119,7 @@ void motor_set(int16_t left, int16_t right)
     else if (right < -PWM_DEADZONE)
     {
         ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_2, 0);
-        ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_3, right);
+        ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_3, -right);
     }
     else
     {
