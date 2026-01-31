@@ -1,8 +1,11 @@
 #include <driver/uart.h>
 #include <driver/gpio.h>
 #include <esp_log.h>
+
 #include <math.h>
 #include <inttypes.h>
+
+#include "motor.h"
 
 // channel 3: throttle
 // channel 2: for/bac
@@ -10,6 +13,7 @@
 
 #define UART_NUM UART_NUM_2
 #define UART_RING_BUF_SIZE 256
+#define UART_BUFFER_FULL_THRES 8
 
 #define IBUS_MAX_FRAME_SIZE 32 // 32-byte frame size
 #define IBUS_CHANNEL_FRAME_SIZE 32
@@ -17,6 +21,7 @@
 #define IBUS_RX_PIN 16
 #define IBUS_TIMEOUT_MS 20 // frames are sent every 7ms
 #define CHANNEL_COUNT 4
+#define JOYSTICK_DEADZONE 20
 
 static void setup_ibus()
 {
@@ -35,15 +40,15 @@ static void setup_ibus()
     uart_set_pin(UART_NUM, UART_PIN_NO_CHANGE, IBUS_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     gpio_set_pull_mode(IBUS_RX_PIN, GPIO_PULLUP_ONLY); // to reduce electrical noise
 
-    // correct framing behavior
-    uart_intr_config_t rx_intr_config =
-    {
-        .rxfifo_full_thresh = IBUS_MAX_FRAME_SIZE,
-        .rx_timeout_thresh = IBUS_TIMEOUT_MS
-    };
+    // // correct framing behavior
+    // uart_intr_config_t rx_intr_config =
+    // {
+    //     .rxfifo_full_thresh = UART_BUFFER_FULL_THRES,
+    //     .rx_timeout_thresh = IBUS_TIMEOUT_MS
+    // };
 
-    uart_intr_config(UART_NUM, &rx_intr_config);
-    uart_enable_rx_intr(UART_NUM);
+    // uart_intr_config(UART_NUM, &rx_intr_config);
+    // uart_enable_rx_intr(UART_NUM);
 
     uart_driver_install(UART_NUM, UART_RING_BUF_SIZE, 0, 0, NULL, 0);
 }
@@ -119,11 +124,23 @@ void app_main(void)
     {
         if(get_channel_data(ibus_data, channel_data, CHANNEL_COUNT))
         {
-            // write control logic from here on
-            // channel data is saved in channel_data
+            int16_t speed = channel_data[2] - 1000;
+            int16_t for_bac;
 
-            if(abs(esp_timer_get_time() % 100000) < 10000)
-                ESP_LOGI("DEBUG", "%"PRIu16" %"PRIu16" %"PRIu16" %"PRIu16, channel_data[0], channel_data[1], channel_data[2], channel_data[3]);
+            if(channel_data[1] > (1500 + JOYSTICK_DEADZONE))
+            {
+                for_bac = 1;
+            }
+            else if(channel_data[1] < (1500 - JOYSTICK_DEADZONE))
+            {
+                for_bac = -1;
+            }
+            else
+            {
+                for_bac = 0;
+            }
+
+            motor_set(speed * for_bac, speed * for_bac);
         }
 
         //vTaskDelay(IBUS_TIMEOUT_MS / portTICK_PERIOD_MS);
