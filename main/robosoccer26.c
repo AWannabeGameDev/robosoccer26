@@ -13,7 +13,7 @@
 
 #define UART_NUM UART_NUM_2
 #define UART_RING_BUF_SIZE 256
-#define UART_BUFFER_FULL_THRES 8
+#define UART_BUFFER_FULL_THRES 32
 
 #define IBUS_MAX_FRAME_SIZE 32 // 32-byte frame size
 #define IBUS_CHANNEL_FRAME_SIZE 32
@@ -36,20 +36,19 @@ static void setup_ibus()
     };
 
     uart_param_config(UART_NUM, &uart_config);
-
     uart_set_pin(UART_NUM, UART_PIN_NO_CHANGE, IBUS_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     gpio_set_pull_mode(IBUS_RX_PIN, GPIO_PULLUP_ONLY); // to reduce electrical noise
 
-    // uart_intr_config_t rx_intr_config =
-    // {
-    //     .rxfifo_full_thresh = UART_BUFFER_FULL_THRES,
-    //      .rx_timeout_thresh = IBUS_TIMEOUT_MS
-    // };
-
-    // uart_intr_config(UART_NUM, &rx_intr_config);
-    // uart_enable_rx_intr(UART_NUM);
-
     uart_driver_install(UART_NUM, UART_RING_BUF_SIZE, 0, 0, NULL, 0);
+
+    uart_intr_config_t rx_intr_config =
+    {
+        .rxfifo_full_thresh = UART_BUFFER_FULL_THRES,
+         .rx_timeout_thresh = IBUS_TIMEOUT_MS
+    };
+
+    uart_intr_config(UART_NUM, &rx_intr_config);
+    uart_enable_rx_intr(UART_NUM);
 }
 
 static bool get_channel_data(uint8_t* ibus_data, uint16_t* channel_data, int channel_count)
