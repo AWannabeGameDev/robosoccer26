@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#include "motor.h"
+#include "motor.hpp"
 
 #define IBUS_CHANNEL_FRAME_SIZE 32
 #define IBUS_CHANNEL_CMD 0x40
@@ -68,6 +68,7 @@ void loop()
     if(get_channel_data(channel_data, CHANNEL_COUNT)) 
     {
         int16_t speed = channel_data[2] - 1000;
+        
         int16_t for_bac = 0;
 
         if (channel_data[1] > (1500 + JOYSTICK_DEADZONE)) 
@@ -79,6 +80,18 @@ void loop()
             for_bac = -1;
         }
 
-        motor_set(speed * for_bac, speed * for_bac);
+        float left_mul = 1.0f;
+        float right_mul = 1.0f;
+
+        if(channel_data[0] > (1500 + JOYSTICK_DEADZONE))
+        {
+            //right_mul = (2000 - channel_data[0]) / 500.0f;
+        }
+        else if(channel_data[0] < (1500 - JOYSTICK_DEADZONE))
+        {
+            //left_mul = (channel_data[0] - 1000) / 500.0f;
+        }
+
+        motor_set((int16_t)(speed * for_bac * left_mul), (int16_t)(speed * for_bac * right_mul));
     }
 }

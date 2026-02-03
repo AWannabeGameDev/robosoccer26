@@ -1,38 +1,27 @@
-#include "motor.h"
+#include "motor.hpp"
 
 /* ===== PIN DEFINITIONS ===== */
 // Note: Use GPIO numbers, not Pin D-numbers (e.g., D1 is GPIO 5)
 // Ensure these pins support PWM on ESP8266
-#define LEFT_RPWM 15 // D8
-#define LEFT_LPWM 13 // D7
-#define LEFT_REN  12 // D6
-#define LEFT_LEN  14 // D5
+#define LEFT_RPWM 12 // D6
+#define LEFT_LPWM 14 // D5
+#define RIGHT_RPWM 4  // D2
+#define RIGHT_LPWM 5  // D1
+#define EN 13 // D7
 
-#define RIGHT_RPWM 2  // D4
-#define RIGHT_LPWM 0  // D3
-#define RIGHT_REN  4  // D2
-#define RIGHT_LEN  5  // D1
-
-#define PWM_DEADZONE 15
+#define PWM_DEADZONE 0
 #define PWM_MAX 1023
 
 void motor_init() 
 {
     pinMode(LEFT_RPWM, OUTPUT);
     pinMode(LEFT_LPWM, OUTPUT);
-    pinMode(LEFT_REN, OUTPUT);
-    pinMode(LEFT_LEN, OUTPUT);
-    
     pinMode(RIGHT_RPWM, OUTPUT);
     pinMode(RIGHT_LPWM, OUTPUT);
-    pinMode(RIGHT_REN, OUTPUT);
-    pinMode(RIGHT_LEN, OUTPUT);
+    pinMode(EN, OUTPUT);
 
     // Enable the drivers
-    digitalWrite(LEFT_REN, HIGH);
-    digitalWrite(LEFT_LEN, HIGH);
-    digitalWrite(RIGHT_REN, HIGH);
-    digitalWrite(RIGHT_LEN, HIGH);
+    digitalWrite(EN, HIGH);
 
     // Set PWM frequency to 20kHz to match your ESP-IDF code
     analogWriteFreq(20000);
