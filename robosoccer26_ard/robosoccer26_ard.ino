@@ -1,12 +1,13 @@
 #include <Arduino.h>
+#include <uart_register.h>
 
 #include "motor.hpp"
 
 #define IBUS_CHANNEL_FRAME_SIZE 32
 #define IBUS_CHANNEL_CMD 0x40
-#define IBUS_TIMEOUT_MS 20
+#define IBUS_TIMEOUT_MS 10 // frame transmitted every 7ms (supposedly)
 #define CHANNEL_COUNT 4
-#define JOYSTICK_DEADZONE 20
+#define JOYSTICK_DEADZONE 15
 
 void setup() 
 {
@@ -23,6 +24,12 @@ void setup()
 bool get_channel_data(uint16_t* channel_data, int channel_count) 
 {
     static uint8_t ibus_data[32];
+
+    // always get a fresh frame
+    while(Serial.available() > 32)
+    {
+        Serial.read();
+    }
 
     int len = Serial.readBytes(ibus_data, 2);
 
@@ -67,6 +74,10 @@ void loop()
 
     if(get_channel_data(channel_data, CHANNEL_COUNT)) 
     {
+        Serial.print(channel_data[0]); Serial.print(" ");
+        Serial.print(channel_data[1]); Serial.print(" ");
+        Serial.println(channel_data[2]);
+
         int16_t speed = channel_data[2] - 1000;
         
         int16_t for_bac = 0;
@@ -85,13 +96,14 @@ void loop()
 
         if(channel_data[0] > (1500 + JOYSTICK_DEADZONE))
         {
-            //right_mul = (2000 - channel_data[0]) / 500.0f;
+            right_mul = (1750 - channel_data[0]) / 250.0f;
         }
         else if(channel_data[0] < (1500 - JOYSTICK_DEADZONE))
         {
-            //left_mul = (channel_data[0] - 1000) / 500.0f;
+            left_mul = (channel_data[0] - 1250) / 250.0f;
         }
 
         motor_set((int16_t)(speed * for_bac * left_mul), (int16_t)(speed * for_bac * right_mul));
+        // motor_set(linear + angular, linear - angular);
     }
 }
